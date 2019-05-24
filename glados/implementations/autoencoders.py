@@ -12,8 +12,8 @@ from operator import mul
 from typing import Callable, List, Tuple, Union
 
 from keras.layers import Conv2D, Dense, Flatten, Input, Layer, MaxPooling2D, UpSampling2D, Reshape
-from keras import Model
-import numpy as np
+
+from glados.utils import model_builder
 
 
 __all__ = ['DenseAutoEncoder', 'CNNAutoEncoder']
@@ -52,19 +52,6 @@ class AutoEncoder:
         self.decoder = None
         self.encoder_decoder = None
 
-    def _model_builder(self, layers: List[Layer]) -> Model:
-        """
-        Build a Keras models based on a layer architecture
-        :param layers: The layers to build the model
-        :return: A builded (not compiled) Keras Model
-        """
-        inputs = layers[0]
-        layer = layers[1](inputs)
-        for l in layers[2:]:
-            layer = l(layer)
-        model = Model(inputs, layer)
-        return model
-
     def fit(self, *args, **kwargs) -> None:
         """
         Fit the DenseEncoderDecoder model to the passed data
@@ -99,13 +86,25 @@ class DenseAutoEncoder(AutoEncoder):
         :param what: The type of architecture to build (encoder or decoder)
         :return: The list of layers for the dense autoencoder
         """
-        layers = [Input(self.input_shape)]
-        layer_activation = self.encoder_layer_activation if what == 'encoder' else self.decoder_layer_activation
-        output_activation = self.encoder_output_activation if what == 'encoder' else self.decoder_output_activation
-        for n in self.neurons:
-            layers.append(Dense(n, activation=layer_activation))
-        layers.append(Dense(self.output_shape, activation=output_activation))
-        return layers
+        def encoder_builder():
+            layers = [Input(self.input_shape)]
+            layer_activation = self.encoder_layer_activation
+            output_activation = self.encoder_output_activation
+            for n in self.neurons:
+                layers.append(Dense(n, activation=layer_activation))
+            layers.append(Dense(self.encoder_size, activation=output_activation))
+            return layers
+
+        def decoder_builder():
+            layers = [Input((self.encoder_size,))]
+            layer_activation = self.decoder_layer_activation
+            output_activation = self.decoder_output_activation
+            for n in self.neurons[::-1]:
+                layers.append(Dense(n, activation=layer_activation))
+            layers.append(Dense(self.output_shape, activation=output_activation))
+            return layers
+
+        return encoder_builder() if what == 'encoder' else decoder_builder()
 
     def build(self) -> None:
         """
@@ -114,9 +113,9 @@ class DenseAutoEncoder(AutoEncoder):
         encoder_layers = self._architecture_builder('encoder')
         decoder_layers = self._architecture_builder('decoder')
         encoder_decoder_layers = encoder_layers + decoder_layers[1:]
-        encoder = self._model_builder(encoder_layers)
-        decoder = self._model_builder(decoder_layers)
-        encoder_decoder = self._model_builder(encoder_decoder_layers)
+        encoder = model_builder(encoder_layers)
+        decoder = model_builder(decoder_layers)
+        encoder_decoder = model_builder(encoder_decoder_layers)
         encoder_decoder.compile(optimizer=self.optimizer, loss=self.loss)
         self. encoder_decoder = encoder_decoder
         self.encoder = encoder
@@ -157,9 +156,9 @@ class CNNAutoEncoder(AutoEncoder):
             flat_reshape = int(reduce(mul, decoder_entry_shape, 1))
             layers = [Input((self.encoder_size,)), Dense(flat_reshape, activation=self.decoder_layer_activation),
                       Reshape(decoder_entry_shape)]
-            for n in self.neurons:
+            for n in self.neurons[::-1]:
                 layers.append(Conv2D(n, conv, activation=self.decoder_layer_activation, padding=padding))
-                if n != self.neurons[-1]:
+                if n != self.neurons[::-1][-1]:
                     layers.append(UpSampling2D((2, 2)))
             layers.append(Conv2D(1, conv, padding=padding, activation=self.decoder_output_activation))
             return layers
@@ -172,23 +171,13 @@ class CNNAutoEncoder(AutoEncoder):
         :param conv: The conv to apply in the Conv2D layers
         """
         encoder_layers = self._architecture_builder('encoder', conv)
-        encoder = self._model_builder(encoder_layers)
+        encoder = model_builder(encoder_layers)
         decoder_entry_shape = encoder.layers[-3].output_shape[1:]
         decoder_layers = self._architecture_builder('decoder', conv, decoder_entry_shape=decoder_entry_shape)
-        decoder = self._model_builder(decoder_layers)
+        decoder = model_builder(decoder_layers)
         encoder_decoder_layers = encoder_layers + decoder_layers[1:]
-        encoder_decoder = self._model_builder(encoder_decoder_layers)
+        encoder_decoder = model_builder(encoder_decoder_layers)
         encoder_decoder.compile(optimizer=self.optimizer, loss=self.loss)
         self.encoder_decoder = encoder_decoder
         self.encoder = encoder
         self.decoder = decoder
-
-
-def generate_elements(decoder: Model, data: np.ndarray) -> np.ndarray:
-    """
-    Generate multiple random image from a decoder
-    :param decoder: The decoder to use to generate the images
-    :param data: The data to use to generate the images
-    :return: A numpy array containing all the generated images
-    """
-    return decoder.predict(data, verbose=0)

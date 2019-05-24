@@ -4,7 +4,7 @@
 
 """
 Multiple implementations of the PCA algorithm
-TODO: Implement a generate_element fot the PCA
+TODO: Implement a generate fot the PCA
 """
 
 
@@ -44,12 +44,16 @@ class PCA:
         Fit the Data to with the PCA algorithm with the parameters given with the PCA constructor
         """
         self.centered_data = self.data - np.mean(self.data.T, axis=1)
-        self.cov_matrix = np.asarray([[_calculate_covariance_matrix(x, y)
-                                       for x in self.centered_data] for y in self.centered_data])  # Use numpy matmul
+        # self.cov_matrix = np.asarray([[_calculate_covariance_matrix(x, y)
+        #                              for x in self.centered_data] for y in self.centered_data])
+        self.cov_matrix = np.matmul(self.centered_data.T, self.centered_data)
         eigen_val, self.eigen_vec['vanilla'] = np.linalg.eigh(self.cov_matrix)
         order = (-eigen_val).argsort()
         self.eigen_vec['sorted'] = np.transpose(self.eigen_vec['vanilla'])[order]
-        self.extracted_data = self.eigen_vec['sorted'][0:self.components].dot(self.centered_data)
+        self.extracted_data = self.eigen_vec['sorted'][0:self.components].dot(self.centered_data.T)
 
-    def plot(self, **kwargs) -> None:
+    def plot(self, *args, **kwargs) -> None:
+        raise NotImplementedError
+
+    def generate(self, *args, **kwargs) -> None:
         raise NotImplementedError

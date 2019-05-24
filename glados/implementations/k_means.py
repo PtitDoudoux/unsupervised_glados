@@ -15,9 +15,6 @@ import numpy as np
 from tqdm import tqdm
 
 
-__all__ = ['LloydKmeans', 'generate_element']
-
-
 class MU(NamedTuple):
     representative: Any
     cluster_item: List[Any]
@@ -36,6 +33,20 @@ class Kmeans:
         self.nb_clusters = nb_clusters
         if not random_mus:
             self.mus = {f'mu{nc}': MU(data[randint(0, data.shape[0])], list()) for nc in range(nb_clusters)}
+        if random_mus:
+            self.mus = {f'mu{nc}': MU(np.asarray([np.random.normal() for _ in range(data.shape[1])]), list())
+                        for nc in range(nb_clusters)}
+
+    @staticmethod
+    def generate(mu1: np.ndarray, mu2: np.ndarray, gradient: float) -> np.ndarray:
+        """
+        Generate a random element
+        :param mu1: The first mu to base the generation on
+        :param mu2: The second mu to base the generation on
+        :param gradient: The gradient between two centroid [0:1]
+        :return: The generated element
+        """
+        return mu1 * gradient + mu2 * (1 - gradient)
 
     def fit(self, max_iteration=100) -> None:
         raise NotImplementedError
@@ -76,14 +87,3 @@ class LloydKmeans(Kmeans):
                 break
             self.mus = new_mus
             iteration += 1
-
-
-def generate_element(mu1: np.ndarray, mu2: np.ndarray, gradient: float) -> np.ndarray:
-    """
-    Generate a random element
-    :param mu1: The first mu to base the generation on
-    :param mu2: The second mu to base the generation on
-    :param gradient: The gradient between two centroid [0:1]
-    :return: The generated element
-    """
-    return mu1*gradient + mu2*(1-gradient)
